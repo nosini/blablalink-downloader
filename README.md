@@ -11,8 +11,14 @@ original uploads (the CDN URLs without the `?height=…&width=…` size query).
 | --- | --- |
 | `https://www.blablalink.com/post/detail?post_uuid=ID` | one post |
 | `https://www.blablalink.com/user?openid=OPENID` | all posts of a user |
+| `https://www.blablalink.com/user?openid=OPENID&tab=favorites` | posts a user has favorited² |
 | `https://www.blablalink.com/?plate_id=N` | feed of a board (plate)¹ |
 | `https://www.blablalink.com/` | the home feed |
+
+² No login needed: favorites are public API data, as long as the user hasn't
+hidden them in their privacy settings. Copy the `openid=` value from your profile page's address bar. Both the
+base64 form the site uses (`MjkwODAt…=`) and the plain `29080-…` form work. The `tab=favorites` form is a convention of this
+extractor. Saved to `blablalink/favorites/{favorite_of}/{user[username]}/`.
 
 ¹ The site doesn't put the board in its URLs; `?plate_id=N` is a convention of
 this extractor. Board ids come from the API (`GetPlateList`), e.g. 38.

@@ -13,9 +13,29 @@ External gallery-dl extractor module. Load it with
 """
 
 from gallery_dl.extractor.common import Extractor, Message
+import base64
+import binascii
+import re
+from urllib.parse import unquote
+
 from gallery_dl import exception, text
 
 BASE_PATTERN = r"(?:https?://)?(?:www\.)?blablalink\.com"
+
+
+def parse_openid(value):
+    """Return the plain openid ('29080-123…') from a profile URL value
+
+    The website puts it into profile URLs base64-encoded.
+    """
+    value = unquote(value)
+    if re.fullmatch(r"\d+-\d+", value):
+        return value
+    try:
+        decoded = base64.b64decode(value + "=" * (-len(value) % 4)).decode()
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return value
+    return decoded if re.fullmatch(r"\d+-\d+", decoded) else value
 
 
 class BlablalinkExtractor(Extractor):
@@ -60,6 +80,10 @@ class BlablalinkExtractor(Extractor):
         data = self.request_json(
             url, method="POST", json=params,
             headers={"X-Language": "en"})
+        if data.get("code") == 1200150 and "intl_openid" in params:
+            raise exception.AbortExtraction(
+                f"Unknown user '{params['intl_openid']}'. The openid looks "
+                f"like '12345-1234567890' (see openid= in the profile URL)")
         if data.get("code"):
             raise exception.AbortExtraction(
                 f"API error {data['code']}: {data.get('msg')}")
@@ -89,14 +113,40 @@ class BlablalinkPostExtractor(BlablalinkExtractor):
         return (self._call("GetPost", post_uuid=self.groups[0]),)
 
 
+class BlablalinkFavoritesExtractor(BlablalinkExtractor):
+    """Extractor for the favorited (collected) posts of a user
+
+    Favorites are public API data, no login is needed. The user needs to
+    have them visible in their privacy settings. The `tab=favorites` URL
+    form is a convention of this extractor. It must stay listed before
+    the user extractor, which would otherwise match the same URL.
+    """
+    subcategory = "favorites"
+    directory_fmt = ("{category}", "favorites", "{favorite_of}",
+                     "{user[username]}")
+    pattern = (BASE_PATTERN +
+               r"/user/?\?(?=(?:.*&)?tab=favorites(?:&|$))(?:.*&)?"
+               r"openid=([^&#]+)")
+    example = ("https://www.blablalink.com"
+               "/user?openid=12345-1234567890&tab=favorites")
+
+    def posts(self):
+        openid = parse_openid(self.groups[0])
+        for post in self._pagination(
+                "GetUserPostCollectionList", intl_openid=openid):
+            post["favorite_of"] = openid
+            yield post
+
+
 class BlablalinkUserExtractor(BlablalinkExtractor):
     """Extractor for all posts of a blablalink user"""
     subcategory = "user"
-    pattern = BASE_PATTERN + r"/user/?\?(?:.*&)?openid=([\w-]+)"
+    pattern = BASE_PATTERN + r"/user/?\?(?:.*&)?openid=([^&#]+)"
     example = "https://www.blablalink.com/user?openid=12345-1234567890"
 
     def posts(self):
-        return self._pagination("GetUserPostList", intl_openid=self.groups[0])
+        return self._pagination("GetUserPostList",
+            intl_openid=parse_openid(self.groups[0]))
 
 
 class BlablalinkPlateExtractor(BlablalinkExtractor):
