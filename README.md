@@ -64,3 +64,7 @@ To ship it inside the package instead, it would have to become a
 `gallery_dl/extractor/blablalink.py` module registered in the extractor
 `modules` list, which means patching upstream on every update; the
 config-directory route avoids that.
+
+## License
+
+GPL-2.0-only, the same license as gallery-dl (see [LICENSE](LICENSE)).
